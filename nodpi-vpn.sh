@@ -35,6 +35,31 @@ install_dependencies() {
     done
 }
 
+# Проверка, активен ли UFW
+is_ufw_active() {
+    sudo ufw status | grep -qw "Status: active"
+}
+
+# Проверка, открыт ли порт
+is_port_open() {
+    local port=$1
+    sudo ufw status | grep -qw "$port"
+}
+
+# Открытие нового порта, если он еще не открыт
+open_new_port() {
+    local new_port=$1
+
+    # Проверяем, открыт ли уже порт
+    if is_port_open $new_port; then
+        echo "Порт $new_port уже открыт."
+    else
+        echo "Открываю порт $new_port..."
+        sudo ufw allow $new_port/tcp
+        sudo ufw allow $new_port/udp
+    fi
+}
+
 # Шаг 2: Конфигурация Shadowsocks
 configure_shadowsocks() {
     echo "Конфигурирую Shadowsocks..."
@@ -56,14 +81,21 @@ EOL
     fi
 }
 
-# Шаг 3: Открытие порта в ufw
+# Шаг 3: Открытие порта в ufw (добавление порта без закрытия других)
 open_port() {
-    echo "Открываю порт $SHADOWSOCKS_PORT в брандмауэре..."
-    sudo ufw allow $SHADOWSOCKS_PORT/tcp
-    sudo ufw allow $SHADOWSOCKS_PORT/udp
-    sudo ufw enable
+    echo "Проверяю и открываю порт $SHADOWSOCKS_PORT..."
+    open_new_port $SHADOWSOCKS_PORT  # Добавление нового порта
+
+    # Проверяем, активен ли UFW, если нет - активируем
+    if is_ufw_active; then
+        echo "UFW уже активен."
+    else
+        echo "UFW не активен, активирую..."
+        sudo ufw --force enable  # Активируем UFW, если он не активен
+    fi
+
     if [ $? -ne 0 ]; then
-        echo "Ошибка при настройке ufw. Скрипт завершен."
+        echo "Ошибка при настройке UFW. Скрипт завершен."
         exit 1
     fi
 }
